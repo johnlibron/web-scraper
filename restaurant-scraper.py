@@ -12,6 +12,7 @@ target_urls = [
 ]
 
 browser = webdriver.Chrome()
+browser.maximize_window()
 
 restaurants = []
 reviews = []
@@ -21,6 +22,7 @@ try:
 
     for url in target_urls:
         browser.execute_script("window.open('" + url + "', '_parent')")
+        time.sleep(5)
 
         soup = BeautifulSoup(browser.page_source, 'html.parser')
 
@@ -71,7 +73,7 @@ try:
             except:
                 hours = []
                 
-            browser.execute_script("document.getElementsByClassName('_3yn85ktl')[0].click()")
+            browser.execute_script("document.getElementsByClassName('_3yn85ktl _1UnOCDRu')[0].click()")
             soup = BeautifulSoup(browser.page_source, 'html.parser')
 
         ########################################################################################################################
@@ -132,9 +134,9 @@ try:
             
         if about_read_more:
             browser.execute_script("document.getElementsByClassName('restaurants-detail-overview-cards-DetailsSectionOverviewCard__viewDetails--ule3z')[0].click()")
+            time.sleep(5)
     
             soup = BeautifulSoup(browser.page_source, 'html.parser')
-            time.sleep(5)
 
             try:
                 about = soup.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__desktopAboutText--VY6hs"}).text
@@ -165,7 +167,7 @@ try:
 
                 category_index += 1
 
-            browser.execute_script("document.getElementsByClassName('_2EFRp_bb')[0].click()")
+            browser.execute_script("document.getElementsByClassName('_2EFRp_bb _3ptEwvMl')[0].click()")
 
         else:
             about_block = soup.find('div', {"class": "restaurants-details-card-DetailsCard__cardBackground--2tGEZ"})
@@ -247,12 +249,16 @@ try:
         except:
             address = None
 
-        location_url = contact_block.find('img', {"class": "restaurants-detail-overview-cards-LocationOverviewCard__mapImage--22-Al"}).get('src')
+        try:
+            location_url = contact_block.find('img', {"class": "restaurants-detail-overview-cards-LocationOverviewCard__mapImage--22-Al"}).get('src')
 
-        parsed = urlparse(location_url)
-        location = parse_qs(parsed.query)['center'][0].split(',')
-        latitude = location[0]
-        longitude = location[1]
+            parsed = urlparse(location_url)
+            location = parse_qs(parsed.query)['center'][0].split(',')
+            latitude = location[0]
+            longitude = location[1]
+        except:
+            latitude = None
+            longitude = None
 
         ########################################################################################################################
         
@@ -343,7 +349,7 @@ try:
 
                 review_list.append(review)
 
-            if review_index == 10:
+            if review_index == 500:
                 break
 
             if current_page < len(page_list):

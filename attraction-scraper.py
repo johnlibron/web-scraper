@@ -1,10 +1,12 @@
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from datetime import date
+import json
 import re
 import time
-import json
 import traceback
+
+from bs4 import BeautifulSoup
+from datetime import datetime
+from selenium import webdriver
+from urllib.parse import urlparse, parse_qs
  
 target_urls = [
     "https://www.tripadvisor.com.ph/Attraction_Review-g19743337-d14088497-Reviews-Cebu_Safari_Adventure_Park-Carmen_Cebu_Island_Visayas.html"
@@ -17,12 +19,17 @@ attractions = []
 reviews = []
 
 try:
-    travel_index = 1
+    business_index = 1
 
     for url in target_urls:
         browser.execute_script("window.open('" + url + "', '_parent')")
+        time.sleep(5)
+
+        browser.execute_script("document.getElementsByClassName('logo_slogan')[0].innerHTML = JSON.stringify(window.__WEB_CONTEXT__.pageManifest.redux.api.responses).toString()")
 
         soup = BeautifulSoup(browser.page_source, 'html.parser')
+
+        main_window = browser.current_window_handle
 
         try:
             check_last_page = '.pageNumbers .pageNum:last-child'
@@ -30,203 +37,226 @@ try:
         except:
             page_list = range(1)
 
-        ########## HEADER BLOCKS ##########
+        ########################################################################################################################
 
-        header_blocks = soup.find_all('div', {"class": "contentWrapper"})
+        header_block = soup.find('div', {"class": "contentWrapper"})
 
-        for header_block in header_blocks:
-            name = header_block.find('h1', {"class", "ui_header"}).text
+        name = header_block.find('h1', {"class", "ui_header"}).text
 
-            rating = header_block.find('span', {"class", "ui_bubble_rating"}).get('class')[1].replace('bubble_','')
-            rating = str(int(rating) / 10)
+        stars = header_block.find('span', {"class", "ui_bubble_rating"}).get('class')[1].replace('bubble_','')
+        stars = str(int(stars) / 10)
 
-            review_count = header_block.find('span', {"class", "reviewCount"}).text.replace(' Reviews', '').replace(' Review', '')
+        review_count = header_block.find('span', {"class", "reviewCount"}).text.replace(' Reviews', '').replace(' Review', '')
 
-            try:
-                popularity = header_block.find('span', {"class", "header_popularity"}).text
-            except:
-                popularity = None
+        try:
+            popularity = header_block.find('span', {"class", "header_popularity"}).text
+        except:
+            popularity = None
 
-            try:
-                tags = header_block.find('span', {"class", "animal_tag"}).find('span', {"class": "detail"}).text
-                tags = [x.strip() for x in tags.split(',')]
+        try:
+            tags = header_block.find('span', {"class", "animal_tag"}).find('span', {"class", "detail"}).text
+            tags = [x.strip() for x in tags.split(',')]
+        except:
+            tags = []
 
-                categories = header_block.find('span', {"class", "attractionCategories"}).find('div', {"class": "detail"}).text
-                categories = [x.strip() for x in categories.split(',')]
+        try:
+            category_list = []
+            categories = header_block.find('span', {"class", "attractionCategories"}).find_all('a')
+            for category in categories:
+                if category.text != 'More':
+                    category_list.append(category.text)
+            categories = category_list
+        except:
+            categories = []
 
-                tags.extend(categories)
-            except:
-                tags = []
+        categories.extend(tags)
 
-            try:
-                street_address = header_block.find('span', {"class", "street-address"}).text
-            except:
-                street_address = None
-
-            try:
-                extended_address = header_block.find('span', {"class", "extended-address"}).text.replace(',', '').strip()
-            except:
-                extended_address = None
-            
-            try:
-                locality = re.split(r'(^[^\d]+)', header_block.find('span', {"class", "locality"}).text)[1:]
-                city = locality[0].strip().replace(',', '').strip()
-                postal_code = locality[1].replace(',', '').strip()
-            except:
-                city = None
-                postal_code = None
-
-            country = header_block.find('span', {"class", "country-name"}).text
-
-        ########## PHOTO BLOCKS ##########
+        ########################################################################################################################
         
-        photo_blocks = soup.find_all('div', {"class": "mosaic_photos"})
+        photo_block = soup.find('div', {"class": "attractions_large"})
 
-        for element in photo_blocks:
-            photo_url = element.find('img', {"class", "basicImg"}).get('src')
+        try:
+            photo_url = photo_block.find('img', {"class", "basicImg"}).get('src')
+            photo_url = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\), ]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', photo_url)[0]
+        except:
+            photo_url = None
 
-        ########## ABOUT BLOCKS ##########
+        ########################################################################################################################
 
         about = None
         suggested_duration = None
+        hours = []
 
-        about_blocks = soup.find_all('div', {"class": "attractions-attraction-detail-about-card-AttractionDetailAboutCard__section--1_Efg"})
+        about_block = soup.find('div', {"class": "ppr_priv_location_detail_about_card"})
 
-        for about_block in about_blocks:
+        about_rows = about_block.find_all('div', {"class": "attractions-attraction-detail-about-card-AttractionDetailAboutCard__section--1_Efg"})
+        about_rows = about_rows[1:]
 
-            span_container = about_block.find('span')
+        for about_row in about_rows:
+            about_row_span = about_row.find('span')
+            if about_row_span.has_attr('class'):
+                if about_row_span.get('class')[1] == 'clock':
+                    browser.execute_script("document.getElementsByClassName('public-location-hours-LocationHours__hoursLink--2wAQh')[0].click()")
+                    soup = BeautifulSoup(browser.page_source, 'html.parser')
 
-            if span_container:
-                if span_container.has_attr('class'):
-                    if span_container.get('class')[1] == 'duration':
-                        suggested_duration = about_block.text.replace('Suggested Duration:', '')
+                    try:
+                        hours_array = soup.find_all('div', {"class": "public-location-hours-AllHoursList__daysAndTimesRow--2CcRX"})
+                        x = 0
+                        while x < len(hours_array):
+                            if x % 2 == 1:
+                                hours.append(hours_array[x-1].text + " | " + hours_array[x].text)
+                            x += 1
+                    except:
+                        hours = []
+                        
+                    browser.execute_script("document.getElementsByClassName('_3yn85ktl _1UnOCDRu')[0].click()")
+                    soup = BeautifulSoup(browser.page_source, 'html.parser')
+                elif about_row_span.get('class')[1] == 'duration':
+                    suggested_duration = about_row.text.replace('Suggested Duration:', '')
+            else:
+                about_read_more = about_block.find('span', {"class", "attractions-attraction-detail-about-card-Description__readMore--2pd33"})
+
+                if about_read_more:                        
+                    browser.execute_script("document.getElementsByClassName('attractions-attraction-detail-about-card-Description__readMore--2pd33')[0].click()")
+                    time.sleep(5)
+            
+                    soup = BeautifulSoup(browser.page_source, 'html.parser')
+
+                    about = soup.find('div', {"class": "attractions-attraction-detail-about-card-Description__modalText--1oJCY"}).text
+
+                    browser.execute_script("document.getElementsByClassName('_2EFRp_bb _3ptEwvMl')[0].click()")
                 else:
-                    about_read_more = about_block.find('span', {"class", "attractions-attraction-detail-about-card-Description__readMore--2pd33"})
-
-                    if about_read_more:                        
-                        browser.execute_script("document.getElementsByClassName('attractions-attraction-detail-about-card-Description__readMore--2pd33')[0].click()")
-                
-                        soup = BeautifulSoup(browser.page_source, 'html.parser')
-                        time.sleep(5)
-
-                        about = soup.select(".attractions-attraction-detail-about-card-Description__modalText--1oJCY")[0].text
-
-                        browser.execute_script("document.getElementsByClassName('_2EFRp_bb')[0].click()")
-                    else:
-                        about = span_container.text
+                    about = about_row_span.text
 
         soup = BeautifulSoup(browser.page_source, 'html.parser')
 
-        ########## CONTACT BLOCKS ##########
+        ########################################################################################################################
 
-        contact_blocks = soup.find_all('div', {"id": "taplc_location_detail_contact_card_ar_responsive_0"})
+        contact_block = soup.find('div', {"class": "ppr_priv_location_detail_contact_card"})
 
-        for contact_block in contact_blocks:
-            contact_info = contact_block.find('div', {"class": "contactInfo"})
+        try:
+            address = contact_block.find('span', {"class": "address"}).text
+        except:
+            address = None
 
-            try:
-                contact_number = contact_info.find('div', {"class": "detail_section phone"}).text
-            except:
-                contact_number = None
+        try:
+            browser.execute_script("document.getElementsByClassName('detail_section website')[0].getElementsByClassName('taLnk')[0].click()")
+            time.sleep(5)
+            browser.switch_to.window(browser.window_handles[1])
 
-        ########## REVIEW FILTER BLOCKS ##########
+            website = browser.current_url
+
+            browser.close()
+            browser.switch_to.window(main_window)
+        except:
+            website = None
+
+        try:
+            contact_number = contact_block.find('div', {"class": "contactType phone is-hidden-mobile"}).text
+        except:
+            contact_number = None
+
+        try:
+            location_url = contact_block.find('img', {"class": "mapImg"}).get('src')
+
+            parsed = urlparse(location_url)
+            location = parse_qs(parsed.query)['center'][0].split(',')
+            latitude = location[0]
+            longitude = location[1]
+        except:
+            latitude = None
+            longitude = None
+
+        try:
+            award = soup.find('div', {"class": "attractions-attraction-detail-about-card-Award__award--3yckF"}).text
+        except:
+            award = None
+            
+        content = soup.find('div', {"class": "logo_slogan"}).text
+
+        try:
+            email_address = re.findall('"email":"(?s)(.*)","address_obj":{', content)[0]
+        except:
+            email_address = None
+
+        ########################################################################################################################
         
         popular_mentions = []
 
-        review_filter_blocks = soup.find_all('div', {"class": "location-review-review-list-parts-ReviewFilters__filters_wrap--y1t86"})
+        review_filter_block = soup.find('div', {"class": "ppr_priv_location_reviews_container_resp"})
 
-        for review_filter_block in review_filter_blocks:
+        mentions = review_filter_block.find_all('span', {"class": "ui_tagcloud"})
 
-            mentions = review_filter_block.find_all('button', {"class": "location-review-review-list-parts-SearchFilter__word_button_secondary--2p0YL"})
+        for mention in mentions:
+            popular_mentions.append(mention.text.strip())
 
-            for mention in mentions:
-                popular_mentions.append(mention.text)
+        popular_mentions = popular_mentions[1:]
 
         attraction = {
-            'travel_id': travel_index,
+            'business_id': business_index,
             'name': name,
             'about': about,
             'photo_url': photo_url,
-            'rating': rating,
+            'address': address,
+            'latitude': latitude,
+            'longitude': longitude,
+            'stars': stars,
             'review_count': review_count,
-            'popularity': popularity,
-            'suggested_duration': suggested_duration,
-            'tags': tags,
-            'popular_mentions': popular_mentions,
-            'hours': {
-                'Monday': [],
-                'Tuesday': [],
-                'Wednesday': [],
-                'Thursday': [],
-                'Friday': [],
-                'Saturday': [],
-                'Sunday': []
+            'is_open': 1,
+            'attributes': {
+                'popularity': popularity,
+                'award': award,
+                'suggested_duration': suggested_duration,
+                'popular_mentions': popular_mentions
             },
-            'latitude': '',
-            'longitude': '',
-            'address': {
-                'street_address': street_address,
-                'extended_address': extended_address,
-                'city': city,
-                'postal_code': postal_code,
-                'country': country
-            },
-            'contact_number': contact_number,
-            'website': None
+            'categories': categories,
+            'hours': hours,
+            'website': website,
+            'email_address': email_address,
+            'contact_number': contact_number
         }
 
-        attractions.append(attraction)
-
         review_index = 0
+        review_list = []
             
         for current_page in page_list:
             current_page += 1
-            browser.execute_script('var elements = document.getElementsByClassName("_36B4Vw6t"); for (var i = 0; i < elements.length; i++) { var element = elements[i]; if (element.innerText == "Read more") { element.click(); } }')
-            time.sleep(3)
+            browser.execute_script('var elements = document.getElementsByClassName("ulBlueLinks"); for (var i = 0; i < elements.length; i++) { var element = elements[i]; if (element.innerText == "More") { element.click(); } }')
+            time.sleep(5)
             soup = BeautifulSoup(browser.page_source, 'html.parser')
-            review_blocks = soup.find_all('div', {"class": "location-review-card-Card__ui_card--2Mri0 location-review-card-Card__card--o3LVm location-review-card-Card__section--NiAcw"})
+            review_blocks = soup.find_all('div', {"class": "review-container"})
 
-            ########## REVIEW BLOCKS ##########
+            ########################################################################################################################
 
             for review_block in review_blocks:
                 review_index += 1
-                reviewer_name = review_block.find('a', {"class": "ui_header_link social-member-event-MemberEventOnObjectBlock__member--35-jC"}).text
-                review_title = review_block.find('a', {"class": "location-review-review-list-parts-ReviewTitle__reviewTitleText--2tFRT"}).text
-                review_text = review_block.find('q', {"class": "location-review-review-list-parts-ExpandableReview__reviewText--gOmRC"}).text
-                review_date = review_block.find('div', {"class": "social-member-event-MemberEventOnObjectBlock__event_type--3njyv"}).text.replace(reviewer_name + ' wrote a review ','')
-                
-                try:
-                    trip_type = review_block.find('span', {"class": "location-review-review-list-parts-TripType__trip_type--3w17i"}).text.replace('Trip type: ','')
-                except:
-                    trip_type = None
+                reviewer_name = review_block.find('div', {"class": "info_text"}).find('div').text
+                review_title = review_block.find('a', {"class": "title"}).text
+                review_text = review_block.find('p', {"class": "partial_entry"}).text
+                review_date = review_block.find('span', {"class": "ratingDate"}).get('title')
 
                 try:
-                    event_date = review_block.find('span', {"class": "location-review-review-list-parts-EventDate__event_date--1epHa"}).text.replace('Date of experience: ','')
+                    checkin_date = review_block.find('div', {"class": "prw_reviews_stay_date_hsx"}).text.replace('Date of experience: ','')
                 except:
-                    event_date = None
+                    checkin_date = None
 
-                rating = review_block.find('span', {"class": "ui_bubble_rating"}).get('class')[1].replace('bubble_','')
-                rating = str(int(rating) / 10)
-                
-                try:
-                    review_date = datetime.strptime(review_date, "%b %Y")
-                except:
-                    today = date.today()
-                    review_date = today.strftime("%b %Y")
+                stars = review_block.find('span', {"class": "ui_bubble_rating"}).get('class')[1].replace('bubble_','')
+                stars = str(int(stars) / 10)
 
                 review = {
                     'review_id': review_index,
-                    'travel_id': travel_index,
-                    'user_name': reviewer_name,
+                    'business_id': business_index,
+                    'reviewer_name': reviewer_name,
                     'title': review_title,
                     'text': review_text,
+                    'tip': None,
                     'date': review_date,
-                    'trip_type': trip_type,
-                    'event_date': event_date,
-                    'rating': rating
+                    'trip_type': None,
+                    'checkin_date': checkin_date,
+                    'stars': stars
                 }
 
-                reviews.append(review)
+                review_list.append(review)
 
             if review_index == 500:
                 break
@@ -234,13 +264,16 @@ try:
             if current_page < len(page_list):
                 browser.execute_script("document.getElementsByClassName('ui_button nav next primary')[0].click()")
             time.sleep(5)
+
+        attractions.append(attraction)
+        reviews.extend(review_list)
         
-        travel_index += 1
+        business_index += 1
 
 except Exception as e:
     print(traceback.format_exc())
 finally:
-    # browser.quit()
+    browser.quit()
 
     with open('data/attractions.json', 'w', encoding='utf-8') as f:
         json.dump(attractions, f, ensure_ascii=False, indent=4)
