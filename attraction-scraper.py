@@ -4,13 +4,10 @@ import time
 import traceback
 
 from bs4 import BeautifulSoup
-from datetime import datetime
 from selenium import webdriver
 from urllib.parse import urlparse, parse_qs
  
-target_urls = [
-    "https://www.tripadvisor.com.ph/Attraction_Review-g19743337-d14088497-Reviews-Cebu_Safari_Adventure_Park-Carmen_Cebu_Island_Visayas.html"
-]
+target_urls = []
 
 browser = webdriver.Chrome()
 browser.maximize_window()

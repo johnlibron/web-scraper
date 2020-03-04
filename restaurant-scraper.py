@@ -7,9 +7,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from urllib.parse import urlparse, parse_qs
  
-target_urls = [
-    "https://www.tripadvisor.com.ph/Restaurant_Review-g298461-d16966329-Reviews-A_Mesa_Seafood_Tapas_Bar-Lapu_Lapu_Mactan_Island_Cebu_Island_Visayas.html"
-]
+target_urls = []
 
 browser = webdriver.Chrome()
 browser.maximize_window()
