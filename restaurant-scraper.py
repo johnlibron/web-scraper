@@ -38,10 +38,16 @@ try:
 
         name = header_block.find('h1', {"class", "ui_header"}).text
 
-        stars = header_block.find('span', {"class", "ui_bubble_rating"}).get('class')[1].replace('bubble_','')
-        stars = str(int(stars) / 10)
+        try:
+            stars = header_block.find('span', {"class", "ui_bubble_rating"}).get('class')[1].replace('bubble_','')
+            stars = str(int(stars) / 10)
+        except:
+            stars = None
 
-        review_count = header_block.find('span', {"class", "reviewCount"}).text.replace(' reviews', '').replace(' review', '')
+        try:
+            review_count = header_block.find('span', {"class", "reviewCount"}).text.replace(' reviews', '').replace(' review', '')
+        except:
+            review_count = None
 
         try:
             popularity = header_block.find('span', {"class", "header_popularity"}).text
@@ -54,26 +60,27 @@ try:
         except:
             categories = []
 
-        open_hours = header_block.find('span', {"class", "public-location-hours-LocationHours__hoursOpenerText--42y6t"}).text
         hours = []
 
-        if open_hours != '+ Add hours':
-            browser.execute_script("document.getElementsByClassName('public-location-hours-LocationHours__hoursOpenerText--42y6t')[0].click()")
-            soup = BeautifulSoup(browser.page_source, 'html.parser')
+        try:
+            open_hours = header_block.find('span', {"class", "public-location-hours-LocationHours__hoursOpenerText--42y6t"}).text
 
-            try:
+            if open_hours != '+ Add hours':
+                browser.execute_script("document.getElementsByClassName('public-location-hours-LocationHours__hoursOpenerText--42y6t')[0].click()")
+                soup = BeautifulSoup(browser.page_source, 'html.parser')
+
                 hours_array = soup.find_all('div', {"class": "public-location-hours-AllHoursList__daysAndTimesRow--2CcRX"})
                 x = 0
                 while x < len(hours_array):
                     if x % 2 == 1:
                         hours.append(hours_array[x-1].text + " | " + hours_array[x].text)
                     x += 1
-            except:
-                hours = []
-                
-            browser.execute_script("document.getElementsByClassName('_3yn85ktl _1UnOCDRu')[0].click()")
-            soup = BeautifulSoup(browser.page_source, 'html.parser')
 
+                browser.execute_script("document.getElementsByClassName('_3yn85ktl _1UnOCDRu')[0].click()")
+                soup = BeautifulSoup(browser.page_source, 'html.parser')
+        except:
+            hours = []
+                
         ########################################################################################################################
         
         photo_block = soup.find('div', {"class": "mosaic_photos"})
@@ -117,6 +124,8 @@ try:
 
         ########################################################################################################################
 
+        about = None
+        about_modal = None
         price_range = None
         special_diets = []
         cuisines = []
@@ -125,59 +134,52 @@ try:
 
         about_block = soup.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__detailCard--WpImp"})
 
-        try:
-            about_read_more = about_block.find('a', {"class", "restaurants-detail-overview-cards-DetailsSectionOverviewCard__viewDetails--ule3z"})
-        except:
-            about_read_more = None
-            
-        if about_read_more:
+        if about_block:
             browser.execute_script("document.getElementsByClassName('restaurants-detail-overview-cards-DetailsSectionOverviewCard__viewDetails--ule3z')[0].click()")
             time.sleep(5)
     
             soup = BeautifulSoup(browser.page_source, 'html.parser')
 
+            about_modal = soup.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__detailsContent--1hucM"})
+
             try:
-                about = soup.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__desktopAboutText--VY6hs"}).text
+                about = about_modal.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__desktopAboutText--VY6hs"}).text
             except:
                 about = None
             
-            category_titles = soup.find_all('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__categoryTitle--2RJP_"})
-            tag_texts = soup.find_all('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__tagText--1OH6h"})
-
-            category_index = 0
-
-            for category_title in category_titles:
-                category_title = category_title.text.lower()
-                if category_title == 'price range':
-                    price_range = tag_texts[category_index].text
-                if category_title == 'special diets':
-                    special_diets = tag_texts[category_index].text
-                    special_diets = [x.strip() for x in special_diets.split(',')]
-                if category_title == 'cuisines':
-                    cuisines = tag_texts[category_index].text
-                    cuisines = [x.strip() for x in cuisines.split(',')]
-                if category_title == 'meals':
-                    meals = tag_texts[category_index].text
-                    meals = [x.strip() for x in meals.split(',')]
-                if category_title == 'features':
-                    features = tag_texts[category_index].text
-                    features = [x.strip() for x in features.split(',')]
-
-                category_index += 1
-
-            browser.execute_script("document.getElementsByClassName('_2EFRp_bb _3ptEwvMl')[0].click()")
-
+            category_titles = about_modal.find_all('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__categoryTitle--2RJP_"})
+            tag_texts = about_modal.find_all('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__tagText--1OH6h"})
         else:
-            about_block = soup.find('div', {"class": "restaurants-details-card-DetailsCard__cardBackground--2tGEZ"})
+            about_block = soup.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCardLite__detailCard--2IKUi"})
+
+            if about_block:
+                browser.execute_script("document.getElementsByClassName('restaurants-detail-overview-cards-DetailsSectionOverviewCardLite__viewDetails--274PD')[0].click()")
+                time.sleep(5)
+        
+                soup = BeautifulSoup(browser.page_source, 'html.parser')
                 
-            try:
-                about = about_block.find('div', {"class": "restaurants-details-card-DesktopView__desktopAboutText--1VvQH"}).text
-            except:
-                about = None
+                about_modal = soup.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__detailsContent--1hucM"})
 
-            category_titles = about_block.find_all('div', {"class": "restaurants-details-card-TagCategories__categoryTitle--28rB6"})
-            tag_texts = about_block.find_all('div', {"class": "restaurants-details-card-TagCategories__tagText--Yt3iG"})
+                try:
+                    about = about_modal.find('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__desktopAboutText--VY6hs"}).text
+                except:
+                    about = None
+                
+                category_titles = about_modal.find_all('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__categoryTitle--2RJP_"})
+                tag_texts = about_modal.find_all('div', {"class": "restaurants-detail-overview-cards-DetailsSectionOverviewCard__tagText--1OH6h"})
+            else:
+                about_block = soup.find('div', {"class": "restaurants-details-card-DetailsCard__cardBackground--2tGEZ"})
 
+                if about_block:
+                    try:
+                        about = about_block.find('div', {"class": "restaurants-details-card-DesktopView__desktopAboutText--1VvQH"}).text
+                    except:
+                        about = None
+
+                    category_titles = about_block.find_all('div', {"class": "restaurants-details-card-TagCategories__categoryTitle--28rB6"})
+                    tag_texts = about_block.find_all('div', {"class": "restaurants-details-card-TagCategories__tagText--Yt3iG"})
+
+        if about_block:
             category_index = 0
 
             for category_title in category_titles:
@@ -198,6 +200,9 @@ try:
                     features = [x.strip() for x in features.split(',')]
 
                 category_index += 1
+
+            if about_modal:
+                browser.execute_script("document.getElementsByClassName('_2EFRp_bb _3ptEwvMl')[0].click()")
 
         if not price_range and len(categories) > 0:
             price_range = categories[0]
@@ -262,14 +267,17 @@ try:
         
         popular_mentions = []
 
-        review_filter_block = soup.find('div', {"class": "ui_tagcloud_group"})
+        try:
+            review_filter_block = soup.find('div', {"class": "ui_tagcloud_group"})
 
-        mentions = review_filter_block.find_all('span', {"class": "ui_tagcloud"})
+            mentions = review_filter_block.find_all('span', {"class": "ui_tagcloud"})
 
-        for mention in mentions:
-            popular_mentions.append(mention.text.strip())
+            for mention in mentions:
+                popular_mentions.append(mention.text.strip())
 
-        popular_mentions = popular_mentions[1:]
+            popular_mentions = popular_mentions[1:]
+        except:
+            popular_mentions = []
 
         restaurant = {
             'business_id': business_index,
